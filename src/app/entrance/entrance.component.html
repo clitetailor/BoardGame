@@ -1,0 +1,58 @@
+<div class="outer-wrapper">
+  <div class="left">
+    <input type="text" class="search" placeholder="Search ...">
+
+    <div class="rooms" *ngFor="let room of rooms">
+      <div class="room">
+        <div class="line">
+          <div class="id">
+            # {{room._id}}
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="cell">
+            <b>Title:</b> {{room.title}}
+          </div>
+
+          <div class="cell">
+            <b>Game:</b> {{room.game}}
+          </div>
+
+          <div class="cell">
+            <b>Status:</b> {{room.numberOfPlayers}} / {{room.maxPlayers}}
+          </div>
+        </div>
+
+        <div class="line">
+        </div>
+
+        <div class="line">
+          <button>Join</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <form action="">
+      <div class="line">
+        <input type="text" placeholder="Title">
+      </div>
+
+      <div class="line">
+        <input type="text" placeholder="Max players">
+      </div>
+
+      <div class="line">
+        <input type="text" placeholder="Game">
+      </div>
+
+      <div class="line">
+        <button>
+          <a href="room">Submit</a>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

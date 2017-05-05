@@ -1,0 +1,70 @@
+<div class="outer-wrapper">
+  <div class="left">
+    <div class="players" *ngFor="let player of players">
+        <div class="player">
+          <div class="line">
+            <b>Player:</b> {{player.username}}
+          </div>
+
+          <div class="line">
+            <b>Level:</b> {{player.level}}
+          </div>
+
+          <div class="line">
+            <b>Ready:</b> {{player.ready}}
+          </div>
+
+          <div class="line">
+            <button>Kick</button>
+          </div>
+        </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="top">
+      <form action="">
+        <div class="line">
+          <div class="cell">
+            <b>ID: </b> {{roomInfo._id}}
+          </div>
+
+          <div class="cell">
+            <b>Title:</b> {{roomInfo.title}}
+          </div>
+        </div>
+
+        <div class="line">
+          <button>Ready</button>
+          <button>Exit</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="middle" *ngFor="let player of pendingPlayers">
+      <div class="title">
+        Pending Players:
+      </div>
+
+      <div class="player">
+        <div class="line">
+          <b>Player:</b> {{player.username}}
+        </div>
+
+        <div class="line">
+          <b>Level:</b> {{player.level}}
+        </div>
+
+        <div class="line">
+          <button>Accept</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <form action="">
+
+      </form>
+    </div>
+  </div>
+</div>

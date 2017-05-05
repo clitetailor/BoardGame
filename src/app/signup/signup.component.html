@@ -1,0 +1,25 @@
+<div class="outer-wrapper">
+  <div class="image"></div>
+
+  <form action="" class="form" #loginForm="ngForm">
+    <div class="line">
+      <input type="text" placeholder="username" name="username" [(ngModel)]="username">
+    </div>
+
+    <div class="line">
+      <input type="password" placeholder="password" name="password" [(ngModel)]="password">
+    </div>
+
+    <div class="line center">
+      <button (click)="signup(loginForm.value.username, loginForm.value.password)">
+        Done
+      </button>
+
+      <button>
+        <a href="/">
+          Cancel
+        </a>
+      </button>
+    </div>
+  </form>
+</div>

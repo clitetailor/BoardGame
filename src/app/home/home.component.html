@@ -1,0 +1,33 @@
+<div class="outer-wrapper">
+  <div class="left">
+    <nav class="navbar">
+      <h1>Chess.io</h1>
+    </nav>
+
+    <div class="content">
+      <form action="" class="form" (ngSubmit)="login()" novalidate>
+        <div class="line">
+          <input type="text" placeholder="username" [(ngModel)]="username" name="username">
+        </div>
+
+        <div class="line">
+          <input type="password" placeholder="password" [(ngModel)]="password" name="password">
+        </div>
+
+        <div class="line center">
+          <button type="submit">
+            Signin
+          </button>
+
+          <button type="button">
+            <a href="signup">Signup</a>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="right">
+    <img src="../../assets/chess.jpg" alt="chess-board">
+  </div>
+</div>
