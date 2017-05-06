@@ -14,10 +14,12 @@ const socketioJwt = require('socketio-jwt');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 
-const mongodb = require('mongodb');
-const MongoClient = mongodb.MongoClient,
-  url = 'mongodb://localhost:27017/chess',
-	Conn = MongoClient.connect(url);
+const neo4j = require('neo4j-driver').v1;
+
+const serverSecret = require('./secret')
+
+const driver = neo4j.driver("bolt://localhost", neo4j.auth.basic(serverSecret.username, serverSecret.password));
+const session = driver.session();
 
 const bodyParser = require('body-parser');
 const multer = require('multer');
@@ -54,167 +56,125 @@ app.get('/', upload.array(), (req, res) => {
   res.sendFile(path.resolve('./dist/index.html'))
 })
 
-app.post('/login', upload.array(), (req, res) => {
+app.post('/login', upload.array(), async (req, res) => {
   const { username, password } = req.body;
 
-	Conn.then(db => {
-		const Users = db.collection('users');
+  if (!username || !password
+    || username.match(/$^|\s+/) || password.match(/$^|\s+/))
+  {
+    res.status(401).send("Invalid username or password");
+    return;
+  }
 
-    if (!username || !password || username.match(/$^|\s+/) || password.match(/$^|\s+/)) {
+  try {
+    const match = await session.run(
+      'MATCH (u: User { username: {username}, password: {password} }) RETURN u',
+      { username, password })
+
+    if (match.records.length > 0) {
+      const token = jwt.sign({ username }, key)
+      res.status(200).json({ token });
+    }
+    else {
+      res.status(401).send("Invalid username or password")
+    }
+  }
+  catch (err) {
+    console.error(err);
+
+    res.status(500).send("Server Error!")
+  }
+})
+
+app.post('/signup', upload.array(), async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password || username.match(/$^|\s+/) || password.match(/$^|\s+/)) {
+    res.status(401).send("Invalid username or password");
+    return;
+  }
+
+  try {
+    const match = await session.run(
+      'MATCH (u:User { username: {username} }) RETURN u',
+      { username, password }
+    )
+
+    if (match.records.length === 0) {
+      session.run(
+        'CREATE (u:User { username: {username}, password: {password} })',
+        { username, password }
+      )
+
+      const token = jwt.sign({ username }, key)
+      res.status(200).json({ token });
+    }
+    else {
       res.status(401).send("Invalid username or password");
       return;
     }
+  }
+  catch (err) {
+    console.error(err);
 
-    Users.findOne({ username })
-      .then(result => {
-        if (result.password === password) {
-					const token = jwt.sign({ username }, key)
-					res.status(200).json({ token })
-        }
-        else {
-					res.status(401).send("Invalid username or password")
-        }
-			})
-			.catch(err => {
-				res.status(401).send("Invalid username or password")
-			})
-	})
-})
-
-app.post('/signup', upload.array(), (req, res) => {
-	const { username, password } = req.body;
-
-	if (!username || !password || username.match(/$^|\s+/) || password.match(/$^|\s+/)) {
-		res.status(401).send("Invalid username or password");
-		return;
-	}
-
-	Conn.then(db => {
-		const Users = db.collection('users');
-
-		Users.findOne({ username })
-      .then(data => {
-        if (data !== undefined && data !== null) {
-          res.status(409).send('Username already exists')
-
-          return;
-        }
-
-				Users.insertOne({ username, password })
-					.then(data => {
-            const token = jwt.sign({ username }, key)
-
-						res.status(200).json({ token });
-					})
-					.catch(err => {
-            console.log(err);
-
-            res.status(500);
-					})
-			})
-			.catch(err => {
-        console.log(err);
-
-        res.status(500);
-			})
-	})
-		.catch(err => {
-			console.log(err);
-
-			res.status(500);
-		})
+    res.status(500).send("Server Error!")
+  }
 })
 
 
 
-function getRooms() {
-  return Conn.then(db =>
-    db.collection('rooms').find({}));
-}
 
-function getRoom(room) {
-  return Conn.then(db =>
-    db.collection('rooms')
-      .findOne(room))
-}
+// io.sockets.on('connection', socketioJwt.authorize({
+// 	secret: key,
+// 	timeout: 15000
+// }))
 
-function getRoomPlayers(roomId) {
-  return Conn.then(db =>
-    db.collection('players')
-      .find({ roomId }))
-}
+// io.sockets.on("authenticated", (socket) => {
 
-function newRoom(room) {
-  return Conn.then(db =>
-    db.collection('rooms')
-      .insertOne(room));
-}
+//   Conn.then(db => {
+//     db.collection('players')
+//       .insertOne({ username: socket.decoded_token.username })
+//   })
 
-function setRoom(room, data) {
-  return Conn.then(db =>
-    db.collection('rooms')
-      .findOneAndUpdate(room, data));
-}
+//   socket.on('disconnect', () => {
+//     Conn.then(db => {
+//       db.collection('players')
+//         .findOneAndDelete({ username: socket.decoded_token.username })
+//     })
+//   })
 
-function setPlayer(player, data) {
-  return Conn.then(db =>
-    db.collection('player')
-      .updateOne(player, data))
-}
+//   socket.on('get-rooms', async () => {
+//     const rooms = await getRooms();
+//     socket.emit(rooms);
+//   })
 
+//   socket.on('create-room', async (room) => {
 
+//     const maxPlayers = 4;
+//     if (Number(room.maxPlayers) || Number.isInteger(Number(room.maxPlayers))) {
+//       maxPlayers = room.maxPlayers;
+//     };
 
-io.sockets.on('connection', socketioJwt.authorize({
-	secret: key,
-	timeout: 15000
-}))
+//     const title = room.title || "None";
+//     const numberOfPlayers = 1;
+//     const _room = { title, numberOfPlayers, maxPlayers }
 
-io.sockets.on("authenticated", (socket) => {
+//     const roomResult = await newRoom(_room);
+//     const roomId = roomResult.insertedId;
 
-  Conn.then(db => {
-    db.collection('players')
-      .insertOne({ username: socket.decoded_token.username })
-  })
+//     const playerResult = await setPlayer({ username: socket.decoded_token.username },
+//       { roomId: result.insertedId })
 
-  socket.on('disconnect', () => {
-    Conn.then(db => {
-      db.collection('players')
-        .findOneAndDelete({ username: socket.decoded_token.username })
-    })
-  })
+//     socket.emit('room-confirmed', Object.assign({}, _room, {
+//       _id: result.insertedId
+//     }));
+//   })
 
-  socket.on('get-rooms', async () => {
-    const rooms = await getRooms();
-    socket.emit(rooms);
-  })
+// 	socket.on('join-room', async (roomId) => {
+//     let room = await findRoom(roomId);
 
-  socket.on('create-room', async (room) => {
+//     if (room.numberOfPlayers >= room.maxPlayers) {
 
-    const maxPlayers = 4;
-    if (Number(room.maxPlayers) || Number.isInteger(Number(room.maxPlayers))) {
-      maxPlayers = room.maxPlayers;
-    };
-
-    const title = room.title || "None";
-    const numberOfPlayers = 1;
-    const _room = { title, numberOfPlayers, maxPlayers }
-
-    const roomResult = await newRoom(_room);
-    const roomId = roomResult.insertedId;
-
-    const playerResult = await setPlayer({ username: socket.decoded_token.username },
-      { roomId: result.insertedId })
-
-    socket.emit('room-confirmed', Object.assign({}, _room, {
-      _id: result.insertedId
-    }));
-  })
-
-	socket.on('join-room', async (roomId) => {
-    let room = await findRoom(roomId);
-
-    if (room.numberOfPlayers >= room.maxPlayers) {
-
-    }
-	})
-})
+//     }
+// 	})
+// })
