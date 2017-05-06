@@ -12,12 +12,15 @@ export class AuthService {
   constructor(private http: Http) { }
 
   loggedIn() {
-    return localStorage.getItem('authToken') !== undefined;
+    let token = localStorage.getItem('authToken')
+
+    return token !== null && token !== undefined;
   }
 
   login(username, password) {
     return this.http.post("http://localhost:9000/login", { username, password })
-      .map(this.extractData)
+      .toPromise()
+      .then(this.jwtToken)
       .catch(this.handleError);
   }
 
@@ -29,8 +32,9 @@ export class AuthService {
   }
 
   private jwtToken(res: Response) {
-    console.log(res.text())
-    localStorage.setItem('authToken', res.text());
+    let body = res.json();
+
+    localStorage.setItem('authToken', body.token);
   }
 
   private extractData(res: Response) {

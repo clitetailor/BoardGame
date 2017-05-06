@@ -1,33 +1,35 @@
-let express = require('express')
+const express = require('express')
 
-let http = require('http');
-let socketio = require('socket.io');
+const http = require('http');
+const socketio = require('socket.io');
 
-let app = express();
-let server = http.createServer(app);
-let io = socketio(server);
+const app = express();
+const server = http.createServer(app);
+const io = socketio(server);
 
-let path = require('path');
-let cors = require('cors');
-let expressJwt = require('express-jwt');
-let socketioJwt = require('socketio-jwt');
-let fs = require('fs');
-let jwt = require('jsonwebtoken');
+const path = require('path');
+const cors = require('cors');
+const expressJwt = require('express-jwt');
+const socketioJwt = require('socketio-jwt');
+const fs = require('fs');
+const jwt = require('jsonwebtoken');
 
-let mongodb = require('mongodb');
-let MongoClient = mongodb.MongoClient,
+const mongodb = require('mongodb');
+const MongoClient = mongodb.MongoClient,
   url = 'mongodb://localhost:27017/chess',
 	Conn = MongoClient.connect(url);
 
-let bodyParser = require('body-parser');
-let multer = require('multer');
-let upload = multer(),
-	port = 9000;
+const bodyParser = require('body-parser');
+const multer = require('multer');
+const upload = multer(),
+  port = 9000;
+
+const key = "my top secret!";
 
 app.use(cors())
-app.use('/users', expressJwt({
-	secret: "my top secret!"
-}).unless({ path: ['/login', '/signup'] }))
+app.use('/', expressJwt({
+	secret: key
+}).unless({ path: ['/', '/login', '/signup'] }))
 
 
 app.use(bodyParser.json())
@@ -42,17 +44,21 @@ server.listen(process.env.PORT || port, () => {
 })
 
 app.post('/login', upload.array(), (req, res) => {
-	const username = req.body.username;
-  const password = req.body.password;
+  const { username, password } = req.body;
 
 	Conn.then(db => {
 		const Users = db.collection('users');
 
+    if (!username || !password || username.match(/$^|\s+/) || password.match(/$^|\s+/)) {
+      res.status(401).send("Invalid username or password");
+      return;
+    }
+
     Users.findOne({ username })
-			.then(result => {
+      .then(result => {
         if (result.password === password) {
-					const token = jwt.sign({ username }, 'my top secret!')
-					res.status(200).json(token)
+					const token = jwt.sign({ username }, key)
+					res.status(200).json({ token })
         }
         else {
 					res.status(401).send("Invalid username or password")
@@ -85,9 +91,9 @@ app.post('/signup', upload.array(), (req, res) => {
 
 				Users.insertOne({ username, password })
 					.then(data => {
-            const token = jwt.sign({ username }, 'my top secret!')
+            const token = jwt.sign({ username }, key)
 
-						res.status(200).json(token);
+						res.status(200).json({ token });
 					})
 					.catch(err => {
             console.log(err);
@@ -108,16 +114,38 @@ app.post('/signup', upload.array(), (req, res) => {
 		})
 })
 
-io.on('connection', socketioJwt.authorize({
-	secret: "my top secret!",
+
+
+io.sockets.on('connection', socketioJwt.authorize({
+	secret: key,
 	timeout: 15000
 }))
 
 io.on("authenticated", (socket) => {
-	socket.on('create-new-room', (room) => {
+
+  socket.on('get-rooms', () => {
+    // TODO: Replace faked rooms with rooms from  MongoDB
+
+    Conn.then(db => {
+      const Rooms = db.collection('rooms');
+      const Users = db.collection('players');
+      const rooms = Rooms.find({});
+
+      socket.emit('rooms', [{
+        _id: 35423542345,
+        title: "bla, bla, bla",
+        game: "yolo",
+        maxPlayers: 4,
+        numberOfPlayers: 3
+      }])
+    })
+  })
+
+	socket.on('create-room', (room) => {
 		Conn.then(db => {
 			const Rooms = db.collection('rooms');
 
+      // TODO: fix maxPlayers
 			const maxPlayers = !room.maxPlayers
 				? 4 :
 					room.maxPlayers >= 10
@@ -140,7 +168,11 @@ io.on("authenticated", (socket) => {
 					console.log(err);
 				})
 		})
-	})
+  })
+
+  socket.on('join-room', (roomId) => {
+
+  })
 
 	socket.on('request-join-room', (room) => {
 		Conn.then(db => {

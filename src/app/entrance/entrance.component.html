@@ -1,8 +1,8 @@
 <div class="outer-wrapper">
   <div class="left">
-    <input type="text" class="search" placeholder="Search ...">
+    <input type="text" class="search" placeholder="Search ..." [(ngModel)]="search">
 
-    <div class="rooms" *ngFor="let room of rooms">
+    <div class="rooms" *ngFor="let room of rooms | roomsFilter: search">
       <div class="room">
         <div class="line">
           <div class="id">
@@ -35,21 +35,21 @@
   </div>
 
   <div class="right">
-    <form action="">
+    <form action="" #roomForm="ngForm" (ngSubmit)="createRoom(title, maxPlayers, game)">
       <div class="line">
-        <input type="text" placeholder="Title">
+        <input type="text" placeholder="Title" [(ngModel)]="title" name="title">
       </div>
 
       <div class="line">
-        <input type="text" placeholder="Max players">
+        <input type="text" placeholder="Max players" [(ngModel)]="maxPlayers" name="maxPlayers">
       </div>
 
       <div class="line">
-        <input type="text" placeholder="Game">
+        <input type="text" placeholder="Game" [(ngModel)]="game" name="game">
       </div>
 
       <div class="line">
-        <button>
+        <button type="submit">
           <a href="room">Submit</a>
         </button>
       </div>

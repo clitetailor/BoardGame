@@ -5,7 +5,7 @@
     </nav>
 
     <div class="content">
-      <form action="" class="form" (ngSubmit)="login()" novalidate>
+      <form action="" class="form" #loginForm="ngForm" (ngSubmit)="login(loginForm.value.username, loginForm.value.password)" novalidate>
         <div class="line">
           <input type="text" placeholder="username" [(ngModel)]="username" name="username">
         </div>
@@ -19,8 +19,8 @@
             Signin
           </button>
 
-          <button type="button">
-            <a href="signup">Signup</a>
+          <button type="button" (click)="router.navigate(['signup'])">
+            Signup
           </button>
         </div>
       </form>

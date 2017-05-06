@@ -12,18 +12,24 @@ import { RoomComponent } from './room/room.component';
 import { SignupComponent } from './signup/signup.component';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
+import { RoomService } from './room.service';
+import { UnauthorizedComponent } from './unauthorized/unauthorized.component';
+import { PageNotFoundComponent } from './page-not-found/page-not-found.component';
+import { RoomsFilterPipe } from './entrance/rooms-filter.pipe'
 
 const appRoutes = [
   { path: '', component: HomeComponent },
   { path: 'signup', component: SignupComponent },
   { path: 'entrance', component: EntranceComponent, canActivate: [AuthGuard] },
-  { path: 'room', component: RoomComponent, canActivate: [AuthGuard] }
+  { path: 'room', component: RoomComponent, canActivate: [AuthGuard] },
+  { path: 'unauthorized', component: UnauthorizedComponent },
+  { path: '**', component: PageNotFoundComponent }
 ]
 
 export function authHttpServiceFactory(http: Http, options: RequestOptions) {
   return new AuthHttp(new AuthConfig({
     tokenName: 'token',
-    tokenGetter: (() => sessionStorage.getItem('authToken')),
+    tokenGetter: (() => localStorage.getItem('authToken')),
     globalHeaders: [{ 'Content-Type': 'application/json' }],
   }), http, options);
 }
@@ -34,7 +40,10 @@ export function authHttpServiceFactory(http: Http, options: RequestOptions) {
     HomeComponent,
     EntranceComponent,
     RoomComponent,
-    SignupComponent
+    SignupComponent,
+    UnauthorizedComponent,
+    PageNotFoundComponent,
+    RoomsFilterPipe
   ],
   imports: [
     BrowserModule,
@@ -50,7 +59,8 @@ export function authHttpServiceFactory(http: Http, options: RequestOptions) {
       useFactory: authHttpServiceFactory,
       deps: [Http, RequestOptions]
     },
-    AuthGuard
+    AuthGuard,
+    RoomService
   ],
   bootstrap: [AppComponent]
 })

@@ -16,13 +16,13 @@ export class HomeComponent implements OnInit {
   ngOnInit() {
   }
 
-  private username: string = "";
-  private password: string = "";
-
-  login() {
-    this.authService.login(this.username, this.password)
-      .subscribe(() => {
+  login(username, password) {
+    this.authService.login(username, password)
+      .then(() => {
         this.router.navigate(['entrance']);
+      })
+      .catch(err => {
+        console.error(err);
       });
   }
 }
