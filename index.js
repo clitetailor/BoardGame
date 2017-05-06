@@ -127,16 +127,41 @@ app.post('/signup', upload.array(), (req, res) => {
 
 
 
-function findRoom(username) {
-  return new Promise(resolve =>
-  Conn.then(db => {
-    let Players = db.collection('rooms');
-
-    Players.findOne({ username })
-      .then()
-    })
-  )
+function getRooms() {
+  return Conn.then(db =>
+    db.collection('rooms').find({}));
 }
+
+function getRoom(room) {
+  return Conn.then(db =>
+    db.collection('rooms')
+      .findOne(room))
+}
+
+function getRoomPlayers(roomId) {
+  return Conn.then(db =>
+    db.collection('players')
+      .find({ roomId }))
+}
+
+function newRoom(room) {
+  return Conn.then(db =>
+    db.collection('rooms')
+      .insertOne(room));
+}
+
+function setRoom(room, data) {
+  return Conn.then(db =>
+    db.collection('rooms')
+      .findOneAndUpdate(room, data));
+}
+
+function setPlayer(player, data) {
+  return Conn.then(db =>
+    db.collection('player')
+      .updateOne(player, data))
+}
+
 
 
 io.sockets.on('connection', socketioJwt.authorize({
@@ -147,119 +172,49 @@ io.sockets.on('connection', socketioJwt.authorize({
 io.sockets.on("authenticated", (socket) => {
 
   Conn.then(db => {
-    const Players = db.collection('players');
-
-    Players.insertOne({ username: socket.decoded_token.username })
+    db.collection('players')
+      .insertOne({ username: socket.decoded_token.username })
   })
 
   socket.on('disconnect', () => {
     Conn.then(db => {
-      const Players = db.collection('players');
-
-      Players.findOneAndDelete({ username: socket.decoded_token.username })
+      db.collection('players')
+        .findOneAndDelete({ username: socket.decoded_token.username })
     })
   })
 
-  socket.on('get-rooms', () => {
-
-    Conn.then(db => {
-      const Rooms = db.collection('rooms');
-      const Players = db.collection('players');
-      const rooms = Rooms.find({});
-
-      socket.emit('rooms', rooms)
-    })
+  socket.on('get-rooms', async () => {
+    const rooms = await getRooms();
+    socket.emit(rooms);
   })
 
-	socket.on('create-room', (room) => {
-		Conn.then(db => {
-      const Rooms = db.collection('rooms');
-      const Players = db.collection('players');
+  socket.on('create-room', async (room) => {
 
-      let maxPlayers = 4;
-      if (Number(room.maxPlayers) || Number.isInteger(Number(room.maxPlayers))) {
-        maxPlayers = room.maxPlayers;
-      };
+    const maxPlayers = 4;
+    if (Number(room.maxPlayers) || Number.isInteger(Number(room.maxPlayers))) {
+      maxPlayers = room.maxPlayers;
+    };
 
-      let title = room.title || "None";
-      let room = { title, numberOfPlayers, maxPlayers }
+    const title = room.title || "None";
+    const numberOfPlayers = 1;
+    const _room = { title, numberOfPlayers, maxPlayers }
 
-			Rooms.insertOne(room)
-        .then(result => {
+    const roomResult = await newRoom(_room);
+    const roomId = roomResult.insertedId;
 
-          let roomId = result.insertedId;
+    const playerResult = await setPlayer({ username: socket.decoded_token.username },
+      { roomId: result.insertedId })
 
-          Players.updateOne({ username: socket.decoded_token.username },
-            { roomId },
-            { upsert: true });
-
-          socket.join(roomId);
-
-          Room.find({})
-            .then(rooms => {
-              io.sockets.emit(rooms, rooms);
-            })
-				})
-				.catch(err => {
-					console.log(err);
-        })
-		})
+    socket.emit('room-confirmed', Object.assign({}, _room, {
+      _id: result.insertedId
+    }));
   })
 
-  socket.on('join-room', (roomId) => {
-    Conn.then(db => {
-      const Players = db.collection('players')
-      const Rooms = db.collection('rooms');
+	socket.on('join-room', async (roomId) => {
+    let room = await findRoom(roomId);
 
-    })
-  })
+    if (room.numberOfPlayers >= room.maxPlayers) {
 
-	socket.on('request-join-room', (room) => {
-		Conn.then(db => {
-			const Rooms = db.collection('rooms');
-
-			Rooms.findOne({
-				_id: room._id
-			})
-				.then(room => {
-					if (room.maxPlayers > room.players) {
-						this.emit('approved', room);
-					}
-					else {
-						// ????? socket id
-						socket.broadcast(socket.id);
-					}
-				})
-				.catch(err => {
-					console.log(err);
-				})
-		})
-	})
-
-	socket.on('join-room', (room) => {
-		Conn.then(db => {
-			const Rooms = db.collection('rooms');
-
-			Rooms.update({
-				_id: room._id
-			}, {
-				$cond: {
-					if: {
-						$gt: ['$maxPlayers', '$players']
-					},
-					then: {
-						$inc: {
-							$players: 1
-						}
-					}
-				}
-			})
-				.then(room => {
-					socket.join('room', room._id);
-				})
-				.catch(err => {
-					console.log(err);
-				})
-		})
+    }
 	})
 })
