@@ -9,10 +9,13 @@ import { Subscription } from 'rxjs/Subscription'
 })
 export class EntranceComponent implements OnInit, OnDestroy {
   rooms: any[] = []
-
   search: string = "";
 
   roomSubscription: Subscription;
+
+  title: string;
+  maxPlayers: number;
+  game: string;
 
   constructor(private roomService: RoomService) { }
 
@@ -31,7 +34,7 @@ export class EntranceComponent implements OnInit, OnDestroy {
     this.roomSubscription.unsubscribe();
   }
 
-  createRoom(title: string, maxPlayers: number, game: string) {
-    this.roomService.createRoom(title, maxPlayers, game);
+  createRoom() {
+    this.roomService.createRoom(this.title, this.maxPlayers, this.game);
   }
 }

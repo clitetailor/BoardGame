@@ -9,18 +9,25 @@ import { Router } from '@angular/router'
 })
 export class SignupComponent implements OnInit {
 
+  username: string;
+  password: string;
+
   constructor(private authService: AuthService, private router: Router) { }
 
   ngOnInit() {
   }
 
-  signup(username, password) {
-    this.authService.signup(username, password)
+  signup() {
+    this.authService.signup(this.username, this.password)
       .then(() => {
         this.router.navigate(['entrance'])
       })
       .catch(err => {
         console.error(err)
       });
+  }
+
+  navigate(commands) {
+    this.router.navigate(commands);
   }
 }

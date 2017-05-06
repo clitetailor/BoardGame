@@ -35,7 +35,7 @@
   </div>
 
   <div class="right">
-    <form action="" #roomForm="ngForm" (ngSubmit)="createRoom(title, maxPlayers, game)">
+    <form action="" #roomForm="ngForm" (ngSubmit)="createRoom()">
       <div class="line">
         <input type="text" placeholder="Title" [(ngModel)]="title" name="title">
       </div>

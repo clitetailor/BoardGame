@@ -1,7 +1,7 @@
 <div class="outer-wrapper">
   <div class="image"></div>
 
-  <form action="" class="form" #signupForm="ngForm" (ngSubmit)="signup(signupForm.value.username, signupForm.value.password)" novalidate>
+  <form action="" class="form" (ngSubmit)="signup()" novalidate>
     <div class="line">
       <input type="text" placeholder="username" name="username" [(ngModel)]="username">
     </div>
@@ -15,7 +15,7 @@
         Done
       </button>
 
-      <button (click)="router.navigate(['/'])" type="button">
+      <button (click)="navigate(['/'])" type="button">
         Cancel
       </button>
     </div>

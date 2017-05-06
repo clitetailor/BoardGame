@@ -12,6 +12,8 @@ export class RoomService {
   private socket: SocketIOClient.Socket;
 
   rooms$: Observable<any>;
+  roomConfirmed$: Observable<any>;
+  joinRoomConfirmed$: Observable<any>;
 
   connect() {
     if (this.isConnected()) {
@@ -36,6 +38,12 @@ export class RoomService {
         observer.next(rooms);
       })
     })
+
+    this.roomConfirmed$ = new Observable(observer => {
+      this.socket.on('room-confirmed', (room) => {
+        observer.next(room);
+      })
+    })
   }
 
   isConnected() {
@@ -55,6 +63,30 @@ export class RoomService {
   joinRoom(roomId: number) {
     if (this.isConnected()) {
       this.socket.emit('join-room', roomId);
+    }
+  }
+
+  approvedPlayer(playerId) {
+    if (this.isConnected()) {
+      this.socket.emit('approved-player', playerId);
+    }
+  }
+
+  exitRoom() {
+    if (this.isConnected()) {
+      this.socket.emit('exit-room');
+    }
+  }
+
+  ejectPlayer(playerId) {
+    if (this.isConnected()) {
+      this.socket.emit('eject-player', playerId);
+    }
+  }
+
+  ready() {
+    if (this.isConnected()) {
+      this.socket.emit('ready')
     }
   }
 }

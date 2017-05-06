@@ -21,6 +21,8 @@
       "styles": [
         "styles.styl"
       ],
+      "deployUrl": "static",
+      "serviceWorker": false,
       "scripts": [],
       "environmentSource": "environments/environment.ts",
       "environments": {

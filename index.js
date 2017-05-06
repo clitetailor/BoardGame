@@ -29,18 +29,29 @@ const key = "my top secret!";
 app.use(cors())
 app.use('/', expressJwt({
 	secret: key
-}).unless({ path: ['/', '/login', '/signup'] }))
+}).unless({
+  path: [
+    new RegExp('/', 'i'),
+    new RegExp('/static/.*', 'i'),
+    new RegExp('/assets/.*', 'i'),
+    new RegExp('/login', 'i'),
+    new RegExp('/signup', 'i')
+  ]
+}))
 
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
-app.use('/js', express.static(path.resolve('./dist/js')))
+app.use('/static', express.static(path.resolve('./dist')))
 app.use('/assets', express.static(path.resolve('./dist/assets')))
-app.use('/css', express.static(path.resolve('./dist/css')))
 
 server.listen(process.env.PORT || port, () => {
 	const port = server.address().port;
 	console.log(`App listening on port ${port}`);
+})
+
+app.get('/', upload.array(), (req, res) => {
+  res.sendFile(path.resolve('./dist/index.html'))
 })
 
 app.post('/login', upload.array(), (req, res) => {
@@ -116,62 +127,91 @@ app.post('/signup', upload.array(), (req, res) => {
 
 
 
+function findRoom(username) {
+  return new Promise(resolve =>
+  Conn.then(db => {
+    let Players = db.collection('rooms');
+
+    Players.findOne({ username })
+      .then()
+    })
+  )
+}
+
+
 io.sockets.on('connection', socketioJwt.authorize({
 	secret: key,
 	timeout: 15000
 }))
 
-io.on("authenticated", (socket) => {
+io.sockets.on("authenticated", (socket) => {
+
+  Conn.then(db => {
+    const Players = db.collection('players');
+
+    Players.insertOne({ username: socket.decoded_token.username })
+  })
+
+  socket.on('disconnect', () => {
+    Conn.then(db => {
+      const Players = db.collection('players');
+
+      Players.findOneAndDelete({ username: socket.decoded_token.username })
+    })
+  })
 
   socket.on('get-rooms', () => {
-    // TODO: Replace faked rooms with rooms from  MongoDB
 
     Conn.then(db => {
       const Rooms = db.collection('rooms');
-      const Users = db.collection('players');
+      const Players = db.collection('players');
       const rooms = Rooms.find({});
 
-      socket.emit('rooms', [{
-        _id: 35423542345,
-        title: "bla, bla, bla",
-        game: "yolo",
-        maxPlayers: 4,
-        numberOfPlayers: 3
-      }])
+      socket.emit('rooms', rooms)
     })
   })
 
 	socket.on('create-room', (room) => {
 		Conn.then(db => {
-			const Rooms = db.collection('rooms');
+      const Rooms = db.collection('rooms');
+      const Players = db.collection('players');
 
-      // TODO: fix maxPlayers
-			const maxPlayers = !room.maxPlayers
-				? 4 :
-					room.maxPlayers >= 10
-						? 10
-						: room.maxPlayers > 1
-							? room.maxPlayers
-							: 2;
+      let maxPlayers = 4;
+      if (Number(room.maxPlayers) || Number.isInteger(Number(room.maxPlayers))) {
+        maxPlayers = room.maxPlayers;
+      };
 
-			Rooms.insertOne({
-				title: room.title,
-				players: 1,
-				maxPlayers: room.maxPlayers
-			})
-				.then(result => {
-					socket.emit('new-room-created', Object.assign({}, room, {
-						_id: result.insertedId
-					}));
+      let title = room.title || "None";
+      let room = { title, numberOfPlayers, maxPlayers }
+
+			Rooms.insertOne(room)
+        .then(result => {
+
+          let roomId = result.insertedId;
+
+          Players.updateOne({ username: socket.decoded_token.username },
+            { roomId },
+            { upsert: true });
+
+          socket.join(roomId);
+
+          Room.find({})
+            .then(rooms => {
+              io.sockets.emit(rooms, rooms);
+            })
 				})
 				.catch(err => {
 					console.log(err);
-				})
+        })
 		})
   })
 
   socket.on('join-room', (roomId) => {
+    Conn.then(db => {
+      const Players = db.collection('players')
+      const Rooms = db.collection('rooms');
 
+    })
   })
 
 	socket.on('request-join-room', (room) => {
