@@ -208,7 +208,7 @@ io.sockets.on("authenticated", (socket) => {
           || room.id;
 
         let players$ = await session.run(
-          "MATCH (g: Game)-[l:LEVEL]-(u: User)-[:MEMBER]->(r:Room { id: {roomId} }) WHERE g.game = r.game RETURN u, l",
+          "MATCH (g: Game)<-[l:LEVEL]-(u: User)-[:MEMBER]->(r:Room { id: {roomId} }) WHERE g.game = r.game RETURN u, l",
           { roomId: room.id }
         )
 
@@ -234,16 +234,21 @@ io.sockets.on("authenticated", (socket) => {
 
   socket.on('create-room', async (title, maxPlayers, game) => {
     try {
-      maxPlayers = 4;
-      if (Number(maxPlayers) || Number.isInteger(Number(maxPlayers)))
+      let defaultMaxPlayers = 4;
+      if (!Number(maxPlayers) || !Number.isInteger(Number(maxPlayers)))
       {
-        maxPlayers = maxPlayers;
+        maxPlayers = defaultMaxPlayers;
       };
 
       title = title || "None";
       game = game || "chess";
 
       let username = socket.decoded_token.username;
+
+      let createGame$ = await session.run(
+        "MERGE (g: Game { game: {game} })",
+        { game }
+      );
 
       let checkRoom$ = await session.run(
         "MATCH (u: User { username: {username} }), (g: Game { game: {game} })"
@@ -340,6 +345,10 @@ io.sockets.on("authenticated", (socket) => {
           { roomId }
         )
 
+        if (roomPlayers$.records.length === 0) {
+          return;
+        }
+
         let players = roomPlayers$.records
           .map(record => record.get('u').properties)
           .map((player, i) => {
@@ -357,8 +366,8 @@ io.sockets.on("authenticated", (socket) => {
       }
       else {
         let waitFor$ = await session.run(
-          "MATCH (u: User { username: {username} })"
-          + " CREATE UNIQUE (u)-[:WAIT]->(:Room { id: {roomId} })",
+          "MATCH (u: User { username: {username} }), (r:Room { id: {roomId} })"
+          + " CREATE UNIQUE (u)-[:WAIT]->(r)",
           { username, roomId }
         );
 
@@ -369,7 +378,7 @@ io.sockets.on("authenticated", (socket) => {
 
         let players = waitingPlayers$.records.map(player => player.get('u').properties)
 
-        socket.in(roomId).broadcast('waiting-players', players);
+        io.to(roomId).emit('waiting-players', players);
       }
     }
     catch (err) {
@@ -449,6 +458,8 @@ io.sockets.on("authenticated", (socket) => {
         "MATCH (r:Room { id: {roomId} }) WHERE size((r)<-[:MEMBER]-(:User)) = 0 DETACH DELETE r",
         { roomId }
       );
+
+      socket.emit('no-room')
     }
     catch (err) {
       console.error(err);

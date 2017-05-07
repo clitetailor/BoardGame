@@ -69,6 +69,7 @@ export class RoomService {
 
     this.waitingPlayers$ = new Observable(observer => {
       this.socket.on('waiting-players', (players) => {
+        console.log(players)
         observer.next(players);
       })
     })

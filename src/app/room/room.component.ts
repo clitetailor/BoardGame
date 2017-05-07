@@ -23,6 +23,9 @@ export class RoomComponent implements OnInit {
     this.roomService.roomPlayers.asObservable().subscribe(players =>
       this.players = players);
 
+    this.roomService.waitingPlayers$.subscribe(players =>
+      this.waitingPlayers = players)
+
     this.roomService.noRoom$.subscribe(() => {
       this.router.navigate(['entrance'])
     })
