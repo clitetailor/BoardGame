@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Http } from '@angular/http'
 import { Subject } from 'rxjs/Subject';
 import { Observable } from 'rxjs/Observable';
-import { BehaviorSubject } from 'rxjs/BehaviorSubject'
+import { ReplaySubject } from 'rxjs/ReplaySubject'
 import * as io from 'socket.io-client';
 
 @Injectable()
@@ -11,12 +11,14 @@ export class RoomService {
   constructor(private http: Http) { }
 
   private socket: SocketIOClient.Socket;
-  roomConfirmed: BehaviorSubject<any>;
-  roomPlayers: BehaviorSubject<any>;
+  roomConfirmed: ReplaySubject<any>;
+  roomPlayers: ReplaySubject<any>;
 
+  connected$: Observable<any>;
   rooms$: Observable<any>;
   joinRoomConfirmed$: Observable<any>;
   waitingPlayers$: Observable<any>;
+  noRoom$: Observable<any>;
 
   connect() {
     if (this.isConnected()) {
@@ -28,6 +30,8 @@ export class RoomService {
     this.socket.on('connect', () => {
       this.socket.emit('authenticate', { token: localStorage.getItem('authToken') })
         .on('authenticated', () => {
+          this.checkRoom();
+
           console.log('authenticated')
         })
         .on('unauthorized', (msg) => {
@@ -36,25 +40,30 @@ export class RoomService {
         })
     })
 
+    this.connected$ = new Observable(observer => {
+      this.socket.on('connect', () => {
+        observer.next();
+      })
+    })
+
     this.rooms$ = new Observable(observer => {
       this.socket.on('rooms', (rooms) => {
         observer.next(rooms);
       })
     })
 
-    this.roomConfirmed = new BehaviorSubject<any>({
-      title: "None",
-      maxPlayers: undefined,
-      game: "None"
-    })
+    this.roomConfirmed = new ReplaySubject<any>(1)
+
+    let a = new ReplaySubject<any>(5);
 
     this.socket.on('room-confirmed', (room) => {
       this.roomConfirmed.next(room);
     })
 
-    this.roomPlayers = new BehaviorSubject<any[]>([]);
+    this.roomPlayers = new ReplaySubject<any[]>(1);
 
     this.socket.on('room-players', (players) => {
+      console.log(players)
       this.roomPlayers.next(players);
     })
 
@@ -63,14 +72,28 @@ export class RoomService {
         observer.next(players);
       })
     })
+
+    this.noRoom$ = new Observable(observer => {
+      this.socket.on('no-room', () => {
+        observer.next();
+      })
+    })
   }
 
   isConnected() {
     return this.socket && this.socket.connected;
   }
 
+  checkRoom() {
+    if (this.isConnected()) {
+      this.socket.emit('check-room');
+    }
+  }
+
   getRooms() {
-    this.socket.emit('get-rooms');
+    if (this.isConnected()) {
+      this.socket.emit('get-rooms')
+    }
   }
 
   createRoom(title: string, maxPlayers: number, game: string) {

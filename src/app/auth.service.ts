@@ -34,7 +34,7 @@ export class AuthService {
   private jwtToken(res: Response) {
     let body = res.json();
 
-    localStorage.setItem('authToken', body.token);
+    return Promise.resolve(localStorage.setItem('authToken', body.token));
   }
 
   private extractData(res: Response) {

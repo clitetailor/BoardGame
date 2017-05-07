@@ -13,6 +13,8 @@ export class EntranceComponent implements OnInit, OnDestroy {
   search: string = "";
 
   roomsSubscription: Subscription;
+  roomConfirmedSubscription: Subscription;
+  connectionSubscription: Subscription;
 
   title: string;
   maxPlayers: number;
@@ -27,20 +29,29 @@ export class EntranceComponent implements OnInit, OnDestroy {
       this.rooms = rooms;
     })
 
-    this.roomService.getRooms();
-
-    this.roomService.roomConfirmed
+    this.roomConfirmedSubscription = this.roomService.roomConfirmed
       .asObservable()
       .subscribe(() => {
         this.router.navigate(['room']);
       })
+
+    this.connectionSubscription = this.roomService.connected$.subscribe(() => {
+      this.roomService.getRooms();
+      this.roomService.checkRoom();
+    })
   }
 
   ngOnDestroy() {
     this.roomsSubscription.unsubscribe();
+    this.roomConfirmedSubscription.unsubscribe();
+    this.connectionSubscription.unsubscribe();
   }
 
   createRoom() {
     this.roomService.createRoom(this.title, this.maxPlayers, this.game);
+  }
+
+  joinRoom(roomId) {
+    this.roomService.joinRoom(roomId);
   }
 }

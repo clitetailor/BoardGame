@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { RoomService } from '../room.service';
 
 @Component({
@@ -11,18 +12,20 @@ export class RoomComponent implements OnInit {
   players = []
   waitingPlayers = []
 
-  constructor(private roomService: RoomService) { }
+  constructor(private roomService: RoomService, private router: Router) { }
 
   ngOnInit() {
-    this.roomInfo = this.roomService.roomConfirmed.getValue();
+    this.roomService.connect();
 
     this.roomService.roomConfirmed.asObservable().subscribe(room =>
       this.roomInfo = room);
 
-    this.players = this.roomService.roomPlayers.getValue();
-
     this.roomService.roomPlayers.asObservable().subscribe(players =>
       this.players = players);
+
+    this.roomService.noRoom$.subscribe(() => {
+      this.router.navigate(['entrance'])
+    })
   }
 
   ready() {

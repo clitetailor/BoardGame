@@ -140,11 +140,27 @@ io.sockets.on("authenticated", (socket) => {
     console.error(err);
   }
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     try {
-      session.run(
+      let removePlayer$ = await session.run(
         "MATCH (u:User { username: {username} }) SET u.active = false",
         { username: socket.decoded_token.username }
+      );
+
+      let checkMember$ = await session.run(
+        "MATCH (u:User { username: {username} })-[m:MEMBER]->(r:Room) DELETE m RETURN r",
+        { username: socket.decoded_token.username }
+      )
+
+      if (checkMember$.records.length === 0) {
+        return;
+      }
+
+      let roomId = checkMember$.records[0].get('r').properties;
+
+      session.run(
+        "MATCH (r:Room { id: {roomId} }) WHERE size((r)<-[:MEMBER]-(:User)) = 0 DETACH DELETE r",
+        { roomId }
       );
     }
     catch (err) {
@@ -155,15 +171,61 @@ io.sockets.on("authenticated", (socket) => {
   socket.on('get-rooms', async () => {
     try {
 
-      const rooms = (await session.run("MATCH (room: Room) RETURN room"))
+      let rooms$ = await session.run("MATCH (room: Room)<-[:MEMBER]-(u:User) RETURN room, count(u) as count");
+
+      let rooms = rooms$
         .records
         .map(record => record.get('room').properties)
-        .map(room => {
-          room.id = room.id.toInt()
+        .map((room, i) => {
+          room.id = room.id.toInt && room.id.toInt()
+            || room.id;
+          room.numberOfPlayers = rooms$.records[i].get('count').toInt();
           return room
         });
 
       socket.emit('rooms', rooms);
+    }
+    catch (err) {
+      console.error(err);
+    }
+  })
+
+  socket.on('check-room', async () => {
+    try {
+
+      let username = socket.decoded_token.username;
+      console.log(username)
+
+      let room$ = await session.run(
+        "MATCH (u: User { username: {username} })-[:MEMBER]-(r:Room)"
+        + " RETURN r",
+        { username }
+      );
+
+      if (room$.records.length !== 0) {
+        let room = room$.records[0].get('r').properties;
+        room.id = room.id.toInt && room.id.toInt()
+          || room.id;
+
+        let players$ = await session.run(
+          "MATCH (g: Game)-[l:LEVEL]-(u: User)-[:MEMBER]->(r:Room { id: {roomId} }) WHERE g.game = r.game RETURN u, l",
+          { roomId: room.id }
+        )
+
+        let players = players$.records
+          .map(record =>
+            record.get('u').properties);
+
+        for (let i = 0; i < players.length; ++i) {
+          players[i].level = players$.records[i].get('l').properties.level.toInt();
+        }
+
+        socket.emit('room-confirmed', room);
+        socket.emit('room-players', players);
+      }
+      else {
+        socket.emit('no-room');
+      }
     }
     catch (err) {
       console.error(err);
@@ -184,8 +246,8 @@ io.sockets.on("authenticated", (socket) => {
       let username = socket.decoded_token.username;
 
       let checkRoom$ = await session.run(
-        "MATCH (u: User { username: {username} })"
-        + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g: Game { game: {game} })",
+        "MATCH (u: User { username: {username} }), (g: Game { game: {game} })"
+        + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g)",
         { username, game }
       )
 
@@ -193,17 +255,43 @@ io.sockets.on("authenticated", (socket) => {
         "MATCH (u: User { username: {username} })"
         + " CREATE UNIQUE (u)-[:HOST]->(r: Room { title: {title}, maxPlayers: {maxPlayers}, game: {game} }), (u)-[:MEMBER]->(r)"
         + " SET r.id = ID(r)"
-        + " RETURN r",
+        + " RETURN r, u",
         { title, maxPlayers, game, username }
       )
 
       let room = joinRoom$.records[0].get('r').properties;
-
       room.id = room.id.toInt();
       room.numberOfPlayers = 1;
 
+      let players$ = await session.run(
+        "MATCH (g: Game)-[l:LEVEL]-(u: User)-[:MEMBER]->(r:Room { id: {roomId} }) WHERE g.game = r.game RETURN u, l",
+        { roomId: room.id }
+      )
+
+      let players = players$.records
+        .map(record =>
+          record.get('u').properties);
+
+      for (let i = 0; i < players.length; ++i) {
+        players[i].level = players$.records[i].get('l').properties.level.toInt();
+      }
+
       socket.join(room.id);
       socket.emit('room-confirmed', room);
+      io.to(room.id).emit('room-players', players);
+
+      let rooms$ = await session.run(
+        "MATCH (r: Room)<-[:MEMBER]-(u:User) RETURN r, count(u) AS count"
+      )
+
+      let rooms = rooms$.records.map(record => record.get('r').properties)
+        .map((room, i) => {
+          room.id = room.id.toInt();
+          room.numberOfPlayers = rooms$.records[i].get('count').toInt();
+          return room;
+        });
+
+      socket.broadcast.emit('rooms', rooms);
     }
     catch (err) {
       console.error(err);
@@ -220,14 +308,18 @@ io.sockets.on("authenticated", (socket) => {
         { roomId }
       )
 
+      if (checkRoom$.records.length === 0) {
+        return;
+      }
+
       let numberOfPlayers = checkRoom$.records[0].get('count').toInt();
       let room = checkRoom$.records[0].get('r').properties;
 
       if (numberOfPlayers < room.maxPlayers) {
         let createLv = await session.run(
-          "MATCH (u: User { username: {username} })"
-          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g: Game { game: {game} })",
-          { username, game }
+          "MATCH (u: User { username: {username} }), (g: Game { game: {game} })"
+          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g)",
+          { username, game: room.game }
         );
 
         let noWait$ = await session.run(
@@ -237,25 +329,31 @@ io.sockets.on("authenticated", (socket) => {
         );
 
         let joinRoom$ = await session.run(
-          "MATCH (u: User { username: {username} })"
-          + " CREATE UNIQUE (u)-[:MEMBER]->(r: Room { id: {roomId} })",
+          "MATCH (u: User { username: {username} }), (r: Room { id: {roomId} })"
+          + " CREATE UNIQUE (u)-[:MEMBER]->(r)",
           { username, roomId }
         )
 
         let roomPlayers$ = await session.run(
-          "MATCH (r: Room { id: {roomId} })<-[:MEMBER]-(u: User)"
-          + " RETURN r, u",
+          "MATCH (r: Room { id: {roomId} })<-[:MEMBER]-(u: User)-[l:LEVEL]->(g:Game) WHERE g.game = r.game"
+          + " RETURN r, u, l",
           { roomId }
         )
 
-        let players = roomPlayers$.records.map(record => record.get('u').properties);
-        let room = roomPlayers$.records[0].get('r').properties;
+        let players = roomPlayers$.records
+          .map(record => record.get('u').properties)
+          .map((player, i) => {
+            player.level = roomPlayers$.records[i].get('l').properties.level.toInt();
+            return player;
+          })
+
+        room = roomPlayers$.records[0].get('r').properties;
 
         room.id = room.id.toInt();
 
         socket.join(roomId);
         socket.emit('room-confirmed', room);
-        socket.in(roomId).broadcast('room-players', players);
+        io.to(roomId).emit('room-players', players);
       }
       else {
         let waitFor$ = await session.run(
@@ -300,8 +398,8 @@ io.sockets.on("authenticated", (socket) => {
 
       if (numberOfPlayers < room.maxPlayers) {
         let createLv = await session.run(
-          "MATCH (u: User { username: {username} })"
-          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g: Game { game: {game} })",
+          "MATCH (u: User { username: {username} }), (g: Game { game: {game} })"
+          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g)",
           { username, game }
         );
 
@@ -339,7 +437,22 @@ io.sockets.on("authenticated", (socket) => {
   })
 
   socket.on('exit-room', async () => {
+    try {
+      let removePlayer$ = await session.run(
+        "MATCH (u:User { username: {username} })-[m:MEMBER]->(r:Room) SET u.active = false DELETE m RETURN r",
+        { username: socket.decoded_token.username }
+      );
 
+      let roomId = removePlayer$.records[0].get('r').properties;
+
+      session.run(
+        "MATCH (r:Room { id: {roomId} }) WHERE size((r)<-[:MEMBER]-(:User)) = 0 DETACH DELETE r",
+        { roomId }
+      );
+    }
+    catch (err) {
+      console.error(err);
+    }
   })
 
   socket.on('eject-player', (playerId) => {

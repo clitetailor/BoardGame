@@ -11,7 +11,7 @@
           </div>
 
           <div class="line">
-            <b>Ready:</b> {{player.ready}}
+            <b>Ready:</b> {{player.ready || 'false'}}
           </div>
 
           <div class="line">
@@ -36,7 +36,7 @@
 
         <div class="line">
           <button (click)="ready()">Ready</button>
-          <button>Exit</button>
+          <button (click)="exitRoom()">Exit</button>
         </div>
       </form>
     </div>
