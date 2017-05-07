@@ -15,7 +15,7 @@
           </div>
 
           <div class="line">
-            <button>Kick</button>
+            <button>Eject</button>
           </div>
         </div>
     </div>
@@ -26,7 +26,7 @@
       <form action="">
         <div class="line">
           <div class="cell">
-            <b>ID: </b> {{roomInfo._id}}
+            <b>ID: </b> {{roomInfo.id}}
           </div>
 
           <div class="cell">
@@ -35,7 +35,7 @@
         </div>
 
         <div class="line">
-          <button>Ready</button>
+          <button (click)="ready()">Ready</button>
           <button>Exit</button>
         </div>
       </form>
@@ -56,7 +56,7 @@
         </div>
 
         <div class="line">
-          <button>Accept</button>
+          <button (click)="invitePlayer(player.username)">Invite</button>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { RoomService } from '../room.service'
 import { Subscription } from 'rxjs/Subscription'
+import { Router } from '@angular/router'
+import { RoomService } from '../room.service'
 
 @Component({
   selector: 'app-entrance',
@@ -17,13 +18,12 @@ export class EntranceComponent implements OnInit, OnDestroy {
   maxPlayers: number;
   game: string;
 
-  constructor(private roomService: RoomService) { }
+  constructor(private roomService: RoomService, private router: Router) { }
 
   ngOnInit() {
     this.roomService.connect();
 
     this.roomsSubscription = this.roomService.rooms$.subscribe(rooms => {
-      console.log(rooms);
       this.rooms = rooms;
     })
 
@@ -36,5 +36,10 @@ export class EntranceComponent implements OnInit, OnDestroy {
 
   createRoom() {
     this.roomService.createRoom(this.title, this.maxPlayers, this.game);
+
+    this.roomService.roomConfirmed
+      .subscribe(() => {
+        this.router.navigate(['room']);
+      })
   }
 }

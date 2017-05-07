@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { RoomService } from '../room.service';
 
 @Component({
   selector: 'app-room',
@@ -6,25 +7,37 @@ import { Component, OnInit } from '@angular/core';
   styleUrls: ['./room.component.styl']
 })
 export class RoomComponent implements OnInit {
-  roomInfo = {
-    _id: 1231234134,
-    title: "bla, bla, bla"
-  }
+  roomInfo = {}
+  players = []
+  waitingPlayers = []
 
-  players = [{
-    username: "bla, bla, bla",
-    level: 5,
-    ready: false
-  }]
-
-  pendingPlayers = [{
-    username: "someone",
-    level: 6
-  }]
-
-  constructor() { }
+  constructor(private roomService: RoomService) { }
 
   ngOnInit() {
+    this.roomInfo = this.roomService.roomConfirmed.getValue();
+
+    this.roomService.roomConfirmed.asObservable().subscribe(room =>
+      this.roomInfo = room);
+
+    this.players = this.roomService.roomPlayers.getValue();
+
+    this.roomService.roomPlayers.asObservable().subscribe(players =>
+      this.players = players);
   }
 
+  ready() {
+    this.roomService.ready();
+  }
+
+  ejectPlayer(username) {
+    this.roomService.ejectPlayer(username);
+  }
+
+  exitRoom() {
+    this.roomService.exitRoom();
+  }
+
+  invitePlayer(username) {
+    this.roomService.invitePlayer(username);
+  }
 }

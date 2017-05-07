@@ -183,25 +183,26 @@ io.sockets.on("authenticated", (socket) => {
 
       let username = socket.decoded_token.username;
 
-      let result1 = session.run(
+      let checkRoom$ = await session.run(
         "MATCH (u: User { username: {username} })"
         + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g: Game { game: {game} })",
         { username, game }
       )
 
-      let result2 = session.run(
+      let joinRoom$ = await session.run(
         "MATCH (u: User { username: {username} })"
-        + " CREATE (r: Room { title: {title}, maxPlayers: {maxPlayers}, game: {game} }), (u)-[:HOST]->(r), (r)<-[:MEMBER]-(u)"
+        + " CREATE UNIQUE (u)-[:HOST]->(r: Room { title: {title}, maxPlayers: {maxPlayers}, game: {game} }), (u)-[:MEMBER]->(r)"
         + " SET r.id = ID(r)"
         + " RETURN r",
         { title, maxPlayers, game, username }
       )
 
-      let room = result2.records[0].get('r').properties;
+      let room = joinRoom$.records[0].get('r').properties;
 
       room.id = room.id.toInt();
       room.numberOfPlayers = 1;
 
+      socket.join(room.id);
       socket.emit('room-confirmed', room);
     }
     catch (err) {
