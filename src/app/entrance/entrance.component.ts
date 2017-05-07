@@ -11,7 +11,7 @@ export class EntranceComponent implements OnInit, OnDestroy {
   rooms: any[] = []
   search: string = "";
 
-  roomSubscription: Subscription;
+  roomsSubscription: Subscription;
 
   title: string;
   maxPlayers: number;
@@ -22,7 +22,7 @@ export class EntranceComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.roomService.connect();
 
-    this.roomSubscription = this.roomService.rooms$.subscribe(rooms => {
+    this.roomsSubscription = this.roomService.rooms$.subscribe(rooms => {
       console.log(rooms);
       this.rooms = rooms;
     })
@@ -31,7 +31,7 @@ export class EntranceComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.roomSubscription.unsubscribe();
+    this.roomsSubscription.unsubscribe();
   }
 
   createRoom() {

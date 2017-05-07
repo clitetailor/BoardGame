@@ -124,57 +124,284 @@ app.post('/signup', upload.array(), async (req, res) => {
 
 
 
-// io.sockets.on('connection', socketioJwt.authorize({
-// 	secret: key,
-// 	timeout: 15000
-// }))
+io.sockets.on('connection', socketioJwt.authorize({
+	secret: key,
+	timeout: 15000
+}))
 
-// io.sockets.on("authenticated", (socket) => {
+io.sockets.on("authenticated", (socket) => {
+  try {
+    session.run(
+      "MATCH (u:User { username: {username} }) SET u.active = true",
+      { username: socket.decoded_token.username }
+    );
+  }
+  catch (err) {
+    console.error(err);
+  }
 
-//   Conn.then(db => {
-//     db.collection('players')
-//       .insertOne({ username: socket.decoded_token.username })
-//   })
+  socket.on('disconnect', () => {
+    try {
+      session.run(
+        "MATCH (u:User { username: {username} }) SET u.active = false",
+        { username: socket.decoded_token.username }
+      );
+    }
+    catch (err) {
+      console.error(err);
+    }
+  })
 
-//   socket.on('disconnect', () => {
-//     Conn.then(db => {
-//       db.collection('players')
-//         .findOneAndDelete({ username: socket.decoded_token.username })
-//     })
-//   })
+  socket.on('get-rooms', async () => {
+    try {
 
-//   socket.on('get-rooms', async () => {
-//     const rooms = await getRooms();
-//     socket.emit(rooms);
-//   })
+      const rooms = (await session.run("MATCH (room: Room) RETURN room"))
+        .records
+        .map(record => record.get('room').properties)
+        .map(room => {
+          room.id = room.id.toInt()
+          return room
+        });
 
-//   socket.on('create-room', async (room) => {
+      socket.emit('rooms', rooms);
+    }
+    catch (err) {
+      console.error(err);
+    }
+  })
 
-//     const maxPlayers = 4;
-//     if (Number(room.maxPlayers) || Number.isInteger(Number(room.maxPlayers))) {
-//       maxPlayers = room.maxPlayers;
-//     };
+  socket.on('create-room', async (title, maxPlayers, game) => {
+    try {
+      maxPlayers = 4;
+      if (Number(maxPlayers) || Number.isInteger(Number(maxPlayers)))
+      {
+        maxPlayers = maxPlayers;
+      };
 
-//     const title = room.title || "None";
-//     const numberOfPlayers = 1;
-//     const _room = { title, numberOfPlayers, maxPlayers }
+      title = title || "None";
+      game = game || "chess";
 
-//     const roomResult = await newRoom(_room);
-//     const roomId = roomResult.insertedId;
+      let username = socket.decoded_token.username;
 
-//     const playerResult = await setPlayer({ username: socket.decoded_token.username },
-//       { roomId: result.insertedId })
+      let result1 = session.run(
+        "MATCH (u: User { username: {username} })"
+        + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g: Game { game: {game} })",
+        { username, game }
+      )
 
-//     socket.emit('room-confirmed', Object.assign({}, _room, {
-//       _id: result.insertedId
-//     }));
-//   })
+      let result2 = session.run(
+        "MATCH (u: User { username: {username} })"
+        + " CREATE (r: Room { title: {title}, maxPlayers: {maxPlayers}, game: {game} }), (u)-[:HOST]->(r), (r)<-[:MEMBER]-(u)"
+        + " SET r.id = ID(r)"
+        + " RETURN r",
+        { title, maxPlayers, game, username }
+      )
 
-// 	socket.on('join-room', async (roomId) => {
-//     let room = await findRoom(roomId);
+      let room = result2.records[0].get('r').properties;
 
-//     if (room.numberOfPlayers >= room.maxPlayers) {
+      room.id = room.id.toInt();
+      room.numberOfPlayers = 1;
 
-//     }
-// 	})
-// })
+      socket.emit('room-confirmed', room);
+    }
+    catch (err) {
+      console.error(err);
+    }
+  })
+
+  socket.on('join-room', async (roomId) => {
+    try {
+      let username = socket.decoded_token.username;
+
+      let checkRoom$ = await session.run(
+        "MATCH (r: Room { id: {roomId} })<-[:MEMBER]-(u: User)"
+        + " RETURN count(u) AS count, r",
+        { roomId }
+      )
+
+      let numberOfPlayers = checkRoom$.records[0].get('count').toInt();
+      let room = checkRoom$.records[0].get('r').properties;
+
+      if (numberOfPlayers < room.maxPlayers) {
+        let createLv = await session.run(
+          "MATCH (u: User { username: {username} })"
+          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g: Game { game: {game} })",
+          { username, game }
+        );
+
+        let noWait$ = await session.run(
+          "MATCH (u: User { username: {username} })-[l:WAIT]->(:Room)"
+          + " DELETE l",
+          { username }
+        );
+
+        let joinRoom$ = await session.run(
+          "MATCH (u: User { username: {username} })"
+          + " CREATE UNIQUE (u)-[:MEMBER]->(r: Room { id: {roomId} })",
+          { username, roomId }
+        )
+
+        let roomPlayers$ = await session.run(
+          "MATCH (r: Room { id: {roomId} })<-[:MEMBER]-(u: User)"
+          + " RETURN r, u",
+          { roomId }
+        )
+
+        let players = roomPlayers$.records.map(record => record.get('u').properties);
+        let room = roomPlayers$.records[0].get('r').properties;
+
+        room.id = room.id.toInt();
+
+        socket.join(roomId);
+        socket.emit('room-confirmed', room);
+        socket.in(roomId).broadcast('room-players', players);
+      }
+      else {
+        let waitFor$ = await session.run(
+          "MATCH (u: User { username: {username} })"
+          + " CREATE UNIQUE (u)-[:WAIT]->(:Room { id: {roomId} })",
+          { username, roomId }
+        );
+
+        let waitingPlayers$ = await session.run(
+          "MATCH (r: Room { id: {roomId} })<-[:WAIT]-(u:User) RETURN u",
+          { roomId }
+        );
+
+        let players = waitingPlayers$.records.map(player => player.get('u').properties)
+
+        socket.in(roomId).broadcast('waiting-players', players);
+      }
+    }
+    catch (err) {
+      console.error(err);
+    }
+  })
+
+  socket.on('invite-player', async (username) => {
+    try {
+      let findRoom$ = await session.run(
+        "MATCH (u: User { username: {username} })-[:MEMBER]->(r: Room)"
+        + " RETURN r",
+        { username: socket.decoded_token.username }
+      );
+
+      let roomId = findRoom$.records[0].get('r').properties.id;
+
+      let checkRoom$ = await session.run(
+        "MATCH (r: Room { id: {roomId} })<-[:MEMBER]-(u: User)"
+        + " RETURN count(u) AS count, r",
+        { roomId }
+      )
+
+      let numberOfPlayers = checkRoom$.records[0].get('count').toInt();
+      let room = checkRoom$.records[0].get('r').properties;
+
+      if (numberOfPlayers < room.maxPlayers) {
+        let createLv = await session.run(
+          "MATCH (u: User { username: {username} })"
+          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g: Game { game: {game} })",
+          { username, game }
+        );
+
+        let noWait$ = await session.run(
+          "MATCH (u: User { username: {username} })-[l:WAIT]->(:Room)"
+          + " DELETE l",
+          { username }
+        );
+
+        let joinRoom$ = await session.run(
+          "MATCH (u: User { username: {username} })"
+          + " CREATE UNIQUE (u)-[:MEMBER]->(r: Room { id: {roomId} })",
+          { username, roomId }
+        )
+
+        let roomPlayers$ = await session.run(
+          "MATCH (r: Room { id: {roomId} })<-[:MEMBER]-(u: User)"
+          + " RETURN r, u",
+          { roomId }
+        )
+
+        let players = roomPlayers$.records.map(record => record.get('u').properties);
+        let room = roomPlayers$.records[0].get('r').properties;
+
+        room.id = room.id.toInt();
+
+        socket.join(roomId);
+        socket.emit('room-confirmed', room);
+        socket.in(roomId).broadcast('room-players', players);
+      }
+    }
+    catch (err) {
+      console.error(err);
+    }
+  })
+
+  socket.on('exit-room', async () => {
+
+  })
+
+  socket.on('eject-player', (playerId) => {
+
+  })
+
+  socket.on('ready', async () => {
+    let username = socket.decoded_token.username;
+
+    let ready$ = await session.run(
+      "MATCH (u: User { username }) SET u.ready = true",
+      { username }
+    )
+
+    let room$ = await session.run(
+      'MATCH (u: User { username: {username} })-[:MEMBER]->(r:Room) RETURN r',
+      { username }
+    )
+
+    let room = room$.records[0].get('r').properties;
+
+    let roomPlayers$ = await session.run(
+      "MATCH (u1: Username { username: {username} })-[:MEMBER]->(:Room)<-[:MEMBER]-(u2: User)"
+      + " RETURN u2",
+      { username }
+    );
+
+    let players = roomPlayers$.records.map(record => record.get('u2').properties);
+
+    if (players.length < room.maxPlayers) {
+      let allReady = roomPlayers$.records.map(record => record.get('u2').properties.ready)
+        .reduce((pre, cur) => pre && cur, true);
+
+      if (allReady) {
+        let results = players
+          .map(player =>
+            Math.random() * room.maxPlayers)
+          .map(result => Math.ceil(result));
+
+        let data = results.map((result, i) => ({
+          username: players[i].username,
+          exp: result
+        }))
+
+        let game = room.game;
+
+        let result$ = session.run(
+          "UNWIND {data} AS props"
+          + " MATCH (u: User { username: props.username })-[l:LEVEL]->(g: Game { game: {game} })"
+          + " SET l.level = l.level + props.result"
+          + " RETURN u, l",
+          { data, game }
+        )
+
+        let displayResult = result$.records.map(record => ({
+          username: record.get('u').properties.username,
+          level: record.get('l').properties.level
+        }))
+
+        socket.in(room.id).broadcast('game-over', displayResult);
+        io.sockets.clients(room.id)
+          .forEach(client => client.leave(room));
+      }
+    }
+  })
+})
