@@ -9,7 +9,7 @@ import { RoomService } from '../room.service';
   styleUrls: ['./room.component.styl']
 })
 export class RoomComponent implements OnInit, OnDestroy {
-  roomInfo = {}
+  roomInfo: any = {}
   players = []
   waitingPlayers = []
 
