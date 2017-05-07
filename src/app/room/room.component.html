@@ -41,12 +41,12 @@
       </form>
     </div>
 
-    <div class="middle" *ngFor="let player of waitingPlayers">
+    <div class="middle">
       <div class="title">
         Waiting Players:
       </div>
 
-      <div class="player">
+      <div class="player" *ngFor="let player of waitingPlayers">
         <div class="line">
           <b>Player:</b> {{player.username}}
         </div>

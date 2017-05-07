@@ -194,7 +194,6 @@ io.sockets.on("authenticated", (socket) => {
     try {
 
       let username = socket.decoded_token.username;
-      console.log(username)
 
       let room$ = await session.run(
         "MATCH (u: User { username: {username} })-[:MEMBER]-(r:Room)"
@@ -217,7 +216,8 @@ io.sockets.on("authenticated", (socket) => {
             record.get('u').properties);
 
         for (let i = 0; i < players.length; ++i) {
-          players[i].level = players$.records[i].get('l').properties.level.toInt();
+          players[i].level = players$.records[i].get('l').properties.level.toInt && players$.records[i].get('l').properties.level.toInt()
+            || players$.records[i].get('l').properties.level;
         }
 
         socket.emit('room-confirmed', room);
@@ -252,7 +252,7 @@ io.sockets.on("authenticated", (socket) => {
 
       let checkRoom$ = await session.run(
         "MATCH (u: User { username: {username} }), (g: Game { game: {game} })"
-        + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g)",
+        + " MERGE (u)-[l:LEVEL]->(g) ON CREATE SET l.level = 1",
         { username, game }
       )
 
@@ -278,7 +278,8 @@ io.sockets.on("authenticated", (socket) => {
           record.get('u').properties);
 
       for (let i = 0; i < players.length; ++i) {
-        players[i].level = players$.records[i].get('l').properties.level.toInt();
+        players[i].level = players$.records[i].get('l').properties.level.toInt && players$.records[i].get('l').properties.level.toInt()
+          || players$.records[i].get('l').properties.level;
       }
 
       socket.join(room.id);
@@ -323,7 +324,7 @@ io.sockets.on("authenticated", (socket) => {
       if (numberOfPlayers < room.maxPlayers) {
         let createLv = await session.run(
           "MATCH (u: User { username: {username} }), (g: Game { game: {game} })"
-          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g)",
+          + " MERGE (u)-[l:LEVEL]->(g) ON CREATE SET l.level = 1",
           { username, game: room.game }
         );
 
@@ -352,7 +353,8 @@ io.sockets.on("authenticated", (socket) => {
         let players = roomPlayers$.records
           .map(record => record.get('u').properties)
           .map((player, i) => {
-            player.level = roomPlayers$.records[i].get('l').properties.level.toInt();
+            player.level = roomPlayers$.records[i].get('l').properties.level.toInt && roomPlayers$.records[i].get('l').properties.level.toInt()
+              || roomPlayers$.records[i].get('l').properties.level ;
             return player;
           })
 
@@ -408,7 +410,7 @@ io.sockets.on("authenticated", (socket) => {
       if (numberOfPlayers < room.maxPlayers) {
         let createLv = await session.run(
           "MATCH (u: User { username: {username} }), (g: Game { game: {game} })"
-          + " CREATE UNIQUE (u)-[:LEVEL { level: 1 }]->(g)",
+          + " MERGE (u)-[l:LEVEL]->(g) ON CREATE SET { level: 1 }",
           { username, game }
         );
 
@@ -471,62 +473,83 @@ io.sockets.on("authenticated", (socket) => {
   })
 
   socket.on('ready', async () => {
-    let username = socket.decoded_token.username;
+    try {
+      let username = socket.decoded_token.username;
 
-    let ready$ = await session.run(
-      "MATCH (u: User { username }) SET u.ready = true",
-      { username }
-    )
+      let ready$ = await session.run(
+        "MATCH (u: User { username: {username} }) SET u.ready = true",
+        { username }
+      )
 
-    let room$ = await session.run(
-      'MATCH (u: User { username: {username} })-[:MEMBER]->(r:Room) RETURN r',
-      { username }
-    )
+      let room$ = await session.run(
+        'MATCH (u: User { username: {username} })-[:MEMBER]->(r:Room) RETURN r',
+        { username }
+      )
 
-    let room = room$.records[0].get('r').properties;
-
-    let roomPlayers$ = await session.run(
-      "MATCH (u1: Username { username: {username} })-[:MEMBER]->(:Room)<-[:MEMBER]-(u2: User)"
-      + " RETURN u2",
-      { username }
-    );
-
-    let players = roomPlayers$.records.map(record => record.get('u2').properties);
-
-    if (players.length < room.maxPlayers) {
-      let allReady = roomPlayers$.records.map(record => record.get('u2').properties.ready)
-        .reduce((pre, cur) => pre && cur, true);
-
-      if (allReady) {
-        let results = players
-          .map(player =>
-            Math.random() * room.maxPlayers)
-          .map(result => Math.ceil(result));
-
-        let data = results.map((result, i) => ({
-          username: players[i].username,
-          exp: result
-        }))
-
-        let game = room.game;
-
-        let result$ = session.run(
-          "UNWIND {data} AS props"
-          + " MATCH (u: User { username: props.username })-[l:LEVEL]->(g: Game { game: {game} })"
-          + " SET l.level = l.level + props.result"
-          + " RETURN u, l",
-          { data, game }
-        )
-
-        let displayResult = result$.records.map(record => ({
-          username: record.get('u').properties.username,
-          level: record.get('l').properties.level
-        }))
-
-        socket.in(room.id).broadcast('game-over', displayResult);
-        io.sockets.clients(room.id)
-          .forEach(client => client.leave(room));
+      if (room$.records.length === 0) {
+        return;
       }
+
+      let room = room$.records[0].get('r').properties;
+      let roomId = room.id.toInt && room.id.toInt()
+        || room.id;
+
+      let roomPlayers$ = await session.run(
+        "MATCH (u: User)-[:MEMBER]->(r:Room {id: {roomId} }) RETURN u",
+        { roomId }
+      );
+
+      let players = roomPlayers$.records.map(record => record.get('u').properties);
+
+      if (players.length === Number(room.maxPlayers)) {
+        let allReady = roomPlayers$.records.map(record => {
+          return record.get('u').properties.ready === "true" || record.get('u').properties.ready && record.get('u').properties.ready !== "false";
+        })
+          .reduce((pre, cur) => pre && cur, true);
+
+        if (allReady) {
+          let results = players
+            .map(player =>
+              Math.random() * room.maxPlayers)
+            .map(result => Math.ceil(result));
+
+          let data = results.map((result, i) => ({
+            username: players[i].username,
+            exp: result
+          }))
+
+          let game = room.game;
+
+          let result$ = await session.run(
+            "UNWIND {data} AS props"
+            + " MATCH (u: User { username: props.username })-[l:LEVEL]->(g: Game { game: {game} })"
+            + " SET l.level = l.level + props.exp"
+            + " RETURN u, l",
+            { data, game }
+          )
+
+          let displayResult = result$.records.map(record => ({
+            username: record.get('u').properties.username,
+            level: record.get('l').properties.level
+          }))
+
+          let done$ = await session.run(
+            "MATCH (r: Room { id: {roomId} })<-[:MEMBER]-(u: User) SET u.ready = false",
+            { roomId }
+          )
+
+          let removeRoom$ = await session.run(
+            "MATCH (r: Room { id: {roomId} }) DETACH DELETE r",
+            { roomId }
+          )
+
+          io.to(roomId).emit('game-over', displayResult);
+        }
+      }
+
+    }
+    catch (err) {
+      console.error(err);
     }
   })
 })

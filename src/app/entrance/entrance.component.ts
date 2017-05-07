@@ -31,7 +31,10 @@ export class EntranceComponent implements OnInit, OnDestroy {
 
     this.roomConfirmedSubscription = this.roomService.roomConfirmed
       .asObservable()
-      .subscribe(() => {
+      .subscribe((room) => {
+        if (!room) {
+          return;
+        }
         this.router.navigate(['room']);
       })
 

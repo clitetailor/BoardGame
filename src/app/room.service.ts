@@ -19,6 +19,7 @@ export class RoomService {
   joinRoomConfirmed$: Observable<any>;
   waitingPlayers$: Observable<any>;
   noRoom$: Observable<any>;
+  gameOver$: Observable<any>;
 
   connect() {
     if (this.isConnected()) {
@@ -54,8 +55,6 @@ export class RoomService {
 
     this.roomConfirmed = new ReplaySubject<any>(1)
 
-    let a = new ReplaySubject<any>(5);
-
     this.socket.on('room-confirmed', (room) => {
       this.roomConfirmed.next(room);
     })
@@ -63,13 +62,11 @@ export class RoomService {
     this.roomPlayers = new ReplaySubject<any[]>(1);
 
     this.socket.on('room-players', (players) => {
-      console.log(players)
       this.roomPlayers.next(players);
     })
 
     this.waitingPlayers$ = new Observable(observer => {
       this.socket.on('waiting-players', (players) => {
-        console.log(players)
         observer.next(players);
       })
     })
@@ -77,6 +74,12 @@ export class RoomService {
     this.noRoom$ = new Observable(observer => {
       this.socket.on('no-room', () => {
         observer.next();
+      })
+    })
+
+    this.gameOver$ = new Observable(observer => {
+      this.socket.on('game-over', (result) => {
+        observer.next(result);
       })
     })
   }
