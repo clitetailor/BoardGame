@@ -14,14 +14,10 @@ export class RoomComponent implements OnInit {
   constructor(private roomService: RoomService) { }
 
   ngOnInit() {
-    this.roomInfo = this.roomService.roomConfirmed.getValue();
-
-    this.roomService.roomConfirmed.asObservable().subscribe(room =>
+    this.roomService.roomConfirmed$.subscribe(room =>
       this.roomInfo = room);
 
-    this.players = this.roomService.roomPlayers.getValue();
-
-    this.roomService.roomPlayers.asObservable().subscribe(players =>
+    this.roomService.roomPlayers$.subscribe(players =>
       this.players = players);
   }
 

@@ -37,7 +37,7 @@ export class EntranceComponent implements OnInit, OnDestroy {
   createRoom() {
     this.roomService.createRoom(this.title, this.maxPlayers, this.game);
 
-    this.roomService.roomConfirmed
+    this.roomService.roomConfirmed$
       .subscribe(() => {
         this.router.navigate(['room']);
       })

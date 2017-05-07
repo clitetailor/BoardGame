@@ -2,7 +2,6 @@ import { Injectable } from '@angular/core';
 import { Http } from '@angular/http'
 import { Subject } from 'rxjs/Subject';
 import { Observable } from 'rxjs/Observable';
-import { BehaviorSubject } from 'rxjs/BehaviorSubject'
 import * as io from 'socket.io-client';
 
 @Injectable()
@@ -11,11 +10,11 @@ export class RoomService {
   constructor(private http: Http) { }
 
   private socket: SocketIOClient.Socket;
-  roomConfirmed: BehaviorSubject<any>;
-  roomPlayers: BehaviorSubject<any>;
 
   rooms$: Observable<any>;
+  roomConfirmed$: Observable<any>;
   joinRoomConfirmed$: Observable<any>;
+  roomPlayers$: Observable<any>;
   waitingPlayers$: Observable<any>;
 
   connect() {
@@ -42,20 +41,16 @@ export class RoomService {
       })
     })
 
-    this.roomConfirmed = new BehaviorSubject<any>({
-      title: "None",
-      maxPlayers: undefined,
-      game: "None"
+    this.roomConfirmed$ = new Observable(observer => {
+      this.socket.on('room-confirmed', (room) => {
+        observer.next(room);
+      })
     })
 
-    this.socket.on('room-confirmed', (room) => {
-      this.roomConfirmed.next(room);
-    })
-
-    this.roomPlayers = new BehaviorSubject<any[]>([]);
-
-    this.socket.on('room-players', (players) => {
-      this.roomPlayers.next(players);
+    this.roomPlayers$ = new Observable(observer => {
+      this.socket.on('room-players', (players) => {
+        observer.next(players);
+      })
     })
 
     this.waitingPlayers$ = new Observable(observer => {
@@ -91,15 +86,15 @@ export class RoomService {
     }
   }
 
-  invitePlayer(username) {
+  invitePlayer(playerId) {
     if (this.isConnected()) {
-      this.socket.emit('invite-player', username);
+      this.socket.emit('invite-player', playerId);
     }
   }
 
-  ejectPlayer(username) {
+  ejectPlayer(playerId) {
     if (this.isConnected()) {
-      this.socket.emit('eject-player', username);
+      this.socket.emit('eject-player', playerId);
     }
   }
 
