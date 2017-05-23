@@ -45,7 +45,6 @@ app.use('/', expressJwt({
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use('/', express.static(path.resolve('./dist')))
-// app.use('/assets', express.static(path.resolve('./dist/assets')))
 
 server.listen(process.env.PORT || port, () => {
 	const port = server.address().port;
